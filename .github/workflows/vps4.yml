@@ -21,7 +21,7 @@ jobs:
       - name: Install Tailscale
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
-          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=vps-${{ github.run_id }}
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=vps-fixed
           tsIP=$(tailscale ip -4 | head -n 1)
           echo "TAILSCALE_IP=$tsIP" >> $GITHUB_ENV
           echo "✅ Tailscale IP: $tsIP"
@@ -36,9 +36,9 @@ jobs:
       - name: Run VPS for 6 hours
         run: |
           echo "⏳ VPS running..."
-          sleep 21600   # 6 ساعات
+          sleep 21600
 
-      - name: Restart This Workflow
+      - name: Restart Workflow
         env:
           REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
