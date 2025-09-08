@@ -1,7 +1,6 @@
 name: VPS4
 on:
   workflow_dispatch:
-
 jobs:
   secure-vps:
     runs-on: ubuntu-latest
@@ -21,7 +20,7 @@ jobs:
       - name: Install Tailscale
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
-          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=vps-fixed
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=vps-${{ github.run_id }}
           tsIP=$(tailscale ip -4 | head -n 1)
           echo "TAILSCALE_IP=$tsIP" >> $GITHUB_ENV
           echo "✅ Tailscale IP: $tsIP"
@@ -29,23 +28,13 @@ jobs:
       - name: Verify SSH Access
         run: |
           echo "Tailscale VPS ready!"
-          echo "IP: $TAILSCALE_IP"
+          echo "IP: $env:TAILSCALE_IP"
           echo "User: root"
           echo "Pass: admin@123"
 
-      - name: Run VPS for 6 hours
+      - name: Keep VPS Alive
         run: |
-          echo "⏳ VPS running..."
-          sleep 21600
-
-      - name: Restart Workflow
-        env:
-          REPO: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "🔄 Restarting workflow"
-          curl -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            https://api.github.com/repos/$REPO/actions/workflows/vps4.yml/dispatches \
-            -d '{"ref":"main"}'
+          while true; do
+            echo "[$(date)] VPS running..."
+            sleep 300
+          done
