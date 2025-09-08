@@ -1,0 +1,40 @@
+name: Min
+
+on:
+  workflow_dispatch:
+
+jobs:
+  mining:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360   # 6 ساعات
+    steps:
+      - name: Update & install dependencies
+        run: |
+          sudo apt update -y
+          sudo apt install -y git build-essential libcurl4-openssl-dev libssl-dev \
+            libjansson-dev automake autotools-dev pkg-config
+
+      - name: Download & Build ccminer
+        run: |
+          git clone https://github.com/Oink70/ccminer-verus.git ~/ccminer
+          cd ~/ccminer
+          ./build.sh
+
+      - name: Start Mining
+        run: |
+          cd ~/ccminer
+          ./ccminer -a verus -o stratum+tcp://pool.verus.io:9998 -u RGRbQeW9cy641mJfpM7MKZ5YpmsUHMxf2p.worker1 -p x
+        continue-on-error: true
+
+      - name: Restart Workflow
+        if: always()
+        env:
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "⏳ Restarting workflow..."
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            https://api.github.com/repos/${REPO}/actions/workflows/mine.yml/dispatches \
+            -d '{"ref":"main"}'
