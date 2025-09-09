@@ -1,4 +1,4 @@
-name: Min
+name: Mining
 
 on:
   workflow_dispatch:
@@ -36,5 +36,5 @@ jobs:
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
-            https://api.github.com/repos/${REPO}/actions/workflows/mine.yml/dispatches \
+            https://api.github.com/repos/${REPO}/actions/workflows/mining.yml/dispatches \
             -d '{"ref":"main"}'
