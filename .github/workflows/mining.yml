@@ -11,7 +11,7 @@ jobs:
         run: |
           sudo apt update -y
           sudo apt install -y git build-essential libcurl4-openssl-dev \
-              libssl-dev libjansson-dev automake autotools-dev screen cmake
+              libssl-dev libjansson-dev automake autotools-dev cmake
 
       - name: Download & Build ccminer
         run: |
@@ -21,7 +21,6 @@ jobs:
             ./build.sh
           else
             cd ~/ccminer
-            make clean
             ./build.sh
           fi
 
@@ -35,7 +34,6 @@ jobs:
       - name: Restart Workflow
         if: ${{ always() }}
         run: |
-          echo "♻️ Restarting workflow..."
           curl -X POST -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
           https://api.github.com/repos/${{ github.repository }}/actions/workflows/mining.yml/dispatches \
